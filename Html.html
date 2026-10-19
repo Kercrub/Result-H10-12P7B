@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pipe Test Result Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Font: Inter & Prompt -->
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Prompt', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800">
+
+    <!-- Header -->
+    <header class="bg-blue-600 text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold">Pipe Test Result Dashboard</h1>
+                <p class="text-blue-100 text-sm">เงื่อนไขผ่าน: ค่า Tensile เฉลี่ยหรือทุกลูป ≥ 350 N (N=4 / Lot)</p>
+            </div>
+            <div>
+                <span id="userStatus" class="bg-blue-700 text-xs px-3 py-1.5 rounded-full font-medium mr-2">สถานะ: ผู้ชมทั่วไป (Read-only)</span>
+                <button id="authBtn" onclick="toggleAuthModal()" class="bg-white text-blue-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-50 transition">เข้าสู่ระบบ (Admin)</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        
+        <!-- Controls & Filter -->
+        <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+            <div class="w-full md:w-1/3">
+                <input type="text" id="searchInput" onkeyup="renderDashboard()" placeholder="ค้นหา Lot หรือ Part List..." class="w-full px-4 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div id="adminActionContainer" class="hidden">
+                <button onclick="openAddModal()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-700 transition shadow">
+                    + เพิ่มข้อมูล Lot ใหม่
+                </button>
+            </div>
+        </div>
+
+        <!-- Dashboard Cards Grid -->
+        <div id="cardGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Data Cards will be injected here by JS -->
+        </div>
+
+    </main>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center z-50 px-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl">
+            <h3 class="text-lg font-bold mb-4 text-slate-900">เข้าสู่ระบบผู้ดูแลระบบ</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Username</label>
+                    <input type="text" id="loginUser" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Password</label>
+                    <input type="password" id="loginPass" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm">
+                </div>
+                <div id="loginError" class="text-red-500 text-xs hidden">Username หรือ Password ไม่ถูกต้อง</div>
+                <div class="flex justify-end gap-2 mt-6">
+                    <button onclick="toggleAuthModal()" class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">ยกเลิก</button>
+                    <button onclick="handleLogin()" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold">เข้าสู่ระบบ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div id="dataModal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center z-50 px-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+            <h3 id="modalTitle" class="text-lg font-bold mb-4 text-slate-900">เพิ่มข้อมูลการทดลองท่อ</h3>
+            <input type="hidden" id="editIndex" value="">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Lot Number</label>
+                    <input type="text" id="inputLot" placeholder="เช่น LOT-2026-001" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm font-bold">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Part List ที่รองรับ</label>
+                    <input type="text" id="inputPartList" placeholder="เช่น Part-A, Part-B, Part-C" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Test 1 (N)</label>
+                        <input type="number" id="t1" oninput="calculateStatus()" class="w-full px-3 py-2 border rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Test 2 (N)</label>
+                        <input type="number" id="t2" oninput="calculateStatus()" class="w-full px-3 py-2 border rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Test 3 (N)</label>
+                        <input type="number" id="t3" oninput="calculateStatus()" class="w-full px-3 py-2 border rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Test 4 (N)</label>
+                        <input type="number" id="t4" oninput="calculateStatus()" class="w-full px-3 py-2 border rounded-lg text-sm">
+                    </div>
+                </div>
+                <!-- Auto Calculation Preview -->
+                <div class="bg-slate-50 p-3 rounded-lg border flex justify-between items-center">
+                    <div>
+                        <div class="text-xs text-slate-500">ค่าต่ำสุดในกลุ่ม (Min Tensile): <span id="previewMin" class="font-bold text-slate-700">0</span> N</div>
+                        <div class="text-xs text-slate-500 mt-1">เกณฑ์ขั้นต่ำ: ≥ 350 N</div>
+                    </div>
+                    <div>
+                        <div id="previewBadge" class="px-3 py-1 rounded-full text-xs font-bold bg-slate-200 text-slate-600">รอระบุข้อมูล</div>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">หมายเหตุเพิ่มเติม (ถ้ามี)</label>
+                    <textarea id="inputNote" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
+                </div>
+                <div class="flex justify-end gap-2 mt-6">
+                    <button onclick="closeDataModal()" class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">ยกเลิก</button>
+                    <button onclick="saveData()" class="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-semibold">บันทึกข้อมูล</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // Mock initial data (เก็บใน localStorage ต่อได้จริง)
+        let pipeData = JSON.parse(localStorage.getItem('pipeTestData')) || [
+            { lot: 'LOT-2026-A1', partList: 'Part A, Part B, Part C', tests: [360, 355, 370, 365], note: 'ผ่านเกณฑ์ทุกชิ้นทดลอง' },
+            { lot: 'LOT-2026-A2', partList: 'Part D, Part E', tests: [340, 355, 360, 350], note: 'มีค่าต่ำกว่า 350 N 1 ตัว (NG)' },
+            { lot: 'LOT-2026-A3', partList: 'Part A, Part F', tests: [380, 390, 385, 375], note: 'คุณภาพดีเยี่ยม' }
+        ];
+
+        let isAdmin = false;
+
+        // Render Dashboard on load
+        window.onload = function() {
+            renderDashboard();
+        }
+
+        function renderDashboard() {
+            const grid = document.getElementById('cardGrid');
+            const keyword = document.getElementById('searchInput').value.toLowerCase();
+            grid.innerHTML = '';
+
+            const filtered = pipeData.filter(item => 
+                item.lot.toLowerCase().includes(keyword) || item.partList.toLowerCase().includes(keyword)
+            );
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `<div class="col-span-full text-center py-12 text-slate-400">ไม่พบข้อมูลท่อที่ค้นหา</div>`;
+                return;
+            }
+
+            filtered.forEach((item, index) => {
+                const originalIndex = pipeData.indexOf(item);
+                const minVal = Math.min(...item.tests);
+                const isPassed = minVal >= 350;
+
+                const card = document.createElement('div');
+                card.className = `bg-white rounded-2xl shadow-sm border transition hover:shadow-md overflow-hidden flex flex-col justify-between ${isPassed ? 'border-emerald-200' : 'border-rose-200'}`;
+                
+                card.innerHTML = `
+                    <div class="p-6">
+                        <!-- Top: Lot & Status Badge (เน้นตัวใหญ่โดดเด่นตามโจทย์) -->
+                        <div class="flex justify-between items-start gap-4 mb-4">
+                            <div>
+                                <span class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Lot Number</span>
+                                <h2 class="text-3xl font-extrabold text-slate-900 tracking-tight">${item.lot}</h2>
+                            </div>
+                            <div class="text-right">
+                                <span class="px-4 py-1.5 rounded-full text-sm font-bold tracking-wide shadow-sm inline-block ${isPassed ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}">
+                                    ${isPassed ? 'ผ่าน (PASS)' : 'ไม่ผ่าน (NG)'}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Part List -->
+                        <div class="mb-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                            <span class="text-xs font-semibold text-slate-500 block mb-1">Part List ที่สามารถนำไปประกอบได้:</span>
+                            <span class="text-sm font-medium text-blue-600">${item.partList}</span>
+                        </div>
+
+                        <!-- Test Results N=4 -->
+                        <div class="mb-4">
+                            <span class="text-xs font-semibold text-slate-500 block mb-2">ผลการทดลอง Tensile (N = 4):</span>
+                            <div class="grid grid-cols-4 gap-2 text-center">
+                                ${item.tests.map((val, i) => `
+                                    <div class="bg-slate-100 p-2 rounded-lg border ${val < 350 ? 'border-rose-300 bg-rose-50 text-rose-600' : 'border-slate-200'}">
+                                        <div class="text-[10px] text-slate-400">#${i+1}</div>
+                                        <div class="text-sm font-bold">${val} N</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        ${item.note ? `<p class="text-xs text-slate-500 italic mt-2">หมายเหตุ: ${item.note}</p>` : ''}
+                    </div>
+
+                    <!-- Card Footer (Admin Actions) -->
+                    ${isAdmin ? `
+                        <div class="bg-slate-50 px-6 py-3 border-t border-slate-100 flex justify-end gap-2">
+                            <button onclick="openEditModal(${originalIndex})" class="text-xs bg-amber-500 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-amber-600 transition">แก้ไข</button>
+                            <button onclick="deleteData(${originalIndex})" class="text-xs bg-rose-500 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-rose-600 transition">ลบ</button>
+                        </div>
+                    ` : ''}
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // Auth Logic
+        function toggleAuthModal() {
+            if (isAdmin) {
+                // Logout
+                isAdmin = false;
+                document.getElementById('userStatus').innerText = 'สถานะ: ผู้ชมทั่วไป (Read-only)';
+                document.getElementById('userStatus').className = 'bg-blue-700 text-xs px-3 py-1.5 rounded-full font-medium mr-2';
+                document.getElementById('authBtn').innerText = 'เข้าสู่ระบบ (Admin)';
+                document.getElementById('adminActionContainer').classList.add('hidden');
+                renderDashboard();
+            } else {
+                document.getElementById('loginModal').classList.remove('hidden');
+                document.getElementById('loginUser').value = '';
+                document.getElementById('loginPass').value = '';
+                document.getElementById('loginError').classList.add('hidden');
+            }
+        }
+
+        function handleLogin() {
+            const u = document.getElementById('loginUser').value;
+            const p = document.getElementById('loginPass').value;
+
+            if (u === 'Fahker' && p === 'zx') {
+                isAdmin = true;
+                document.getElementById('loginModal').classList.add('hidden');
+                document.getElementById('userStatus').innerText = 'สถานะ: ผู้แก้ไข (Admin: Fahker)';
+                document.getElementById('userStatus').className = 'bg-emerald-700 text-xs px-3 py-1.5 rounded-full font-medium mr-2';
+                document.getElementById('authBtn').innerText = 'ออกจากระบบ';
+                document.getElementById('adminActionContainer').classList.remove('hidden');
+                renderDashboard();
+            } else {
+                document.getElementById('loginError').classList.remove('hidden');
+            }
+        }
+
+        // Add / Edit Modal Logic
+        function openAddModal() {
+            document.getElementById('modalTitle').innerText = 'เพิ่มข้อมูล Lot ใหม่';
+            document.getElementById('editIndex').value = '';
+            document.getElementById('inputLot').value = '';
+            document.getElementById('inputPartList').value = '';
+            document.getElementById('t1').value = '';
+            document.getElementById('t2').value = '';
+            document.getElementById('t3').value = '';
+            document.getElementById('t4').value = '';
+            document.getElementById('inputNote').value = '';
+            calculateStatus();
+            document.getElementById('dataModal').classList.remove('hidden');
+        }
+
+        function openEditModal(index) {
+            const item = pipeData[index];
+            document.getElementById('modalTitle').innerText = 'แก้ไขข้อมูล Lot: ' + item.lot;
+            document.getElementById('editIndex').value = index;
+            document.getElementById('inputLot').value = item.lot;
+            document.getElementById('inputPartList').value = item.partList;
+            document.getElementById('t1').value = item.tests[0];
+            document.getElementById('t2').value = item.tests[1];
+            document.getElementById('t3').value = item.tests[2];
+            document.getElementById('t4').value = item.tests[3];
+            document.getElementById('inputNote').value = item.note || '';
+            calculateStatus();
+            document.getElementById('dataModal').classList.remove('hidden');
+        }
+
+        function closeDataModal() {
+            document.getElementById('dataModal').classList.add('hidden');
+        }
+
+        function calculateStatus() {
+            const t1 = parseFloat(document.getElementById('t1').value) || 0;
+            const t2 = parseFloat(document.getElementById('t2').value) || 0;
+            const t3 = parseFloat(document.getElementById('t3').value) || 0;
+            const t4 = parseFloat(document.getElementById('t4').value) || 0;
+
+            const values = [t1, t2, t3, t4].filter(v => v > 0);
+            if (values.length === 0) {
+                document.getElementById('previewMin').innerText = '0';
+                document.getElementById('previewBadge').innerText = 'รอระบุข้อมูล';
+                document.getElementById('previewBadge').className = 'px-3 py-1 rounded-full text-xs font-bold bg-slate-200 text-slate-600';
+                return;
+            }
+
+            const minVal = Math.min(...values);
+            document.getElementById('previewMin').innerText = minVal;
+
+            const badge = document.getElementById('previewBadge');
+            if (minVal >= 350) {
+                badge.innerText = 'ผ่านเกณฑ์ (PASS)';
+                badge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700';
+            } else {
+                badge.innerText = 'ต่ำกว่าเกณฑ์ (NG)';
+                badge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-700';
+            }
+        }
+
+        function saveData() {
+            const lot = document.getElementById('inputLot').value.trim();
+            const partList = document.getElementById('inputPartList').value.trim();
+            const t1 = parseFloat(document.getElementById('t1').value) || 0;
+            const t2 = parseFloat(document.getElementById('t2').value) || 0;
+            const t3 = parseFloat(document.getElementById('t3').value) || 0;
+            const t4 = parseFloat(document.getElementById('t4').value) || 0;
+            const note = document.getElementById('inputNote').value.trim();
+            const editIndex = document.getElementById('editIndex').value;
+
+            if (!lot || !partList) {
+                alert('กรุณากรอกข้อมูล Lot และ Part List ให้ครบถ้วน');
+                return;
+            }
+
+            const newItem = {
+                lot: lot,
+                partList: partList,
+                tests: [t1, t2, t3, t4],
+                note: note
+            };
+
+            if (editIndex === '') {
+                pipeData.unshift(newItem); // เพิ่มไว้บนสุด
+            } else {
+                pipeData[editIndex] = newItem;
+            }
+
+            localStorage.setItem('pipeTestData', JSON.stringify(pipeData));
+            closeDataModal();
+            renderDashboard();
+        }
+
+        function deleteData(index) {
+            if (confirm('คุณต้องการลบข้อมูล Lot นี้ใช่หรือไม่?')) {
+                pipeData.splice(index, 1);
+                localStorage.setItem('pipeTestData', JSON.stringify(pipeData));
+                renderDashboard();
+            }
+        }
+    </script>
+</body>
+</html>
